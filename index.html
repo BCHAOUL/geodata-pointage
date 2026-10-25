@@ -1,1 +1,147 @@
+```html
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GéoData Consulting — Pointage</title>
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 600px;
+      margin: 20px auto;
+      padding: 16px;
+      color: #222;
+    }
+    h2 { color: #14532d; }
+    input, button {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 13px;
+      margin: 8px 0;
+      font-size: 16px;
+    }
+    button {
+      background: #15803d;
+      color: white;
+      border: 0;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    #reader { margin-top: 16px; }
+    #message {
+      margin-top: 16px;
+      padding: 12px;
+      background: #f3f4f6;
+      border-radius: 6px;
+      white-space: pre-line;
+      overflow-wrap: anywhere;
+    }
+  </style>
+</head>
+<body>
+  <h2>GéoData Consulting</h2>
+  <h3>Pointage des participants</h3>
 
+  <label for="journee">Identifiant de la journée (ID_JOURNEE) :</label>
+  <input id="journee" placeholder="Ex. : AEZR" autocomplete="off">
+
+  <button id="start" onclick="demarrerScan()">Démarrer le scan</button>
+  <button onclick="arreterScan()">Arrêter le scan</button>
+
+  <div id="reader"></div>
+  <div id="message">Saisis l'identifiant de la journée, puis démarre le scan.</div>
+
+  <script>
+    const URL_APPS_SCRIPT =
+      "https://script.google.com/macros/s/AKfycby-S79UxyYCXd6NmJXhK7QmPsC4RQAosYybguFXuKoMpPirMChMCQi4tJ-kUdIeNBlG/exec";
+
+    let scanner = null;
+    let traitementEnCours = false;
+
+    function message(texte) {
+      document.getElementById("message").textContent = texte;
+    }
+
+    async function demarrerScan() {
+      const journee = document.getElementById("journee").value.trim();
+
+      if (!journee) {
+        message("Saisis d'abord l'identifiant de la journée.");
+        return;
+      }
+
+      if (scanner) {
+        message("Le scanner est déjà actif.");
+        return;
+      }
+
+      if (typeof Html5Qrcode === "undefined") {
+        message("Impossible de charger le scanner. Vérifie ta connexion Internet.");
+        return;
+      }
+
+      scanner = new Html5Qrcode("reader");
+
+      try {
+        await scanner.start(
+          { facingMode: "environment" },
+          { fps: 10, qrbox: { width: 250, height: 250 } },
+          async function(token) {
+            if (traitementEnCours) return;
+            traitementEnCours = true;
+
+            try {
+              await scanner.pause(true);
+              message(
+                "QR code détecté.\n" +
+                "Ouverture de Google pour enregistrer la présence..."
+              );
+
+              const url = new URL(URL_APPS_SCRIPT);
+              url.searchParams.set("action", "pointage");
+              url.searchParams.set("token", token);
+              url.searchParams.set("journee", journee);
+
+              // La navigation évite un appel fetch cross-origin.
+              // Apps Script vérifiera le token et la journée.
+              window.location.href = url.toString();
+            } catch (e) {
+              message("Erreur : " + (e.message || e));
+              traitementEnCours = false;
+            }
+          }
+        );
+
+        message("Caméra activée. Présente un QR code devant l'objectif.");
+      } catch (e) {
+        scanner = null;
+        message(
+          "Impossible d'ouvrir la caméra. Autorise l'accès à la caméra " +
+          "et ouvre le site GitHub Pages en HTTPS."
+        );
+      }
+    }
+
+    async function arreterScan() {
+      if (!scanner) {
+        message("Le scanner n'est pas actif.");
+        return;
+      }
+
+      try {
+        await scanner.stop();
+        scanner.clear();
+      } catch (e) {
+        // Le scanner est peut-être déjà arrêté.
+      }
+
+      scanner = null;
+      traitementEnCours = false;
+      message("Scanner arrêté.");
+    }
+  </script>
+</body>
+</html>
+```
